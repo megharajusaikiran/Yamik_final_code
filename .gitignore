@@ -1,0 +1,39 @@
+# ROS 2 generated folders
+build/
+install/
+log/
+
+# Python generated files
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+.pytest_cache/
+
+# Python environments
+venv/
+.venv/
+env/
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Sensitive files - NEVER PUSH
+.env
+.env.*
+*.pem
+*.key
+id_rsa
+id_rsa.pub
+id_ed25519
+id_ed25519.pub
+
+# Temporary test files
+raw_bts7960_test.py
