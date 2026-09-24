@@ -5,3 +5,5 @@ __pycache__/
 *.pyc
 *.egg-info/
 .DS_Store
+src/YDLidar-SDK/
+src/ydlidar_ros2_driver/
