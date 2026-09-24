@@ -4,11 +4,10 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     return LaunchDescription([
-
         Node(
             package='rover_bringup',
-            executable='ultrasonic_two_pi5_node',
-            name='ultrasonic_two_pi5_node',
+            executable='rover_sensors_gps_node',
+            name='rover_sensors_gps_node',
             output='screen'
         ),
 

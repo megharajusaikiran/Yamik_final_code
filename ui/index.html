@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YAMIK Rover - Full Telemetry &amp; Navigation</title>
+<style>
+:root{--bg:#07101d;--panel:#101f34;--line:#2a466a;--text:#edf5ff;--muted:#9ab0cc;--blue:#2d7dff;--green:#2ed78a;--yellow:#ffcc5b;--red:#ff6271}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(circle at 15% -10%,rgba(45,125,255,0.16),transparent 38%),radial-gradient(circle at 95% 0%,rgba(46,215,138,0.08),transparent 32%),var(--bg);color:var(--text);font-family:Inter,system-ui,sans-serif}
+main{max-width:1200px;margin:auto;padding:20px}
+h1{margin:0 0 8px;font-size:26px}
+.sub{margin:0 0 18px;color:var(--muted)}
+.bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
+input{background:#081526;color:var(--text);border:1px solid var(--line);border-radius:11px;padding:13px 14px;width:220px}
+input.small{width:150px;padding:10px 12px}
+button{border:0;border-radius:11px;padding:11px 18px;color:white;background:linear-gradient(135deg,#3487ff,#1f64df);cursor:pointer;font-weight:750}
+button:hover{filter:brightness(1.1)}
+button:active{transform:scale(0.97)}
+button.green{background:linear-gradient(135deg,#2ed78a,#18a866)}
+button.danger{background:linear-gradient(135deg,#d94b59,#a82e3a)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.wide{grid-column:1/-1}
+.card{background:rgba(16,31,52,0.92);border:1px solid var(--line);border-radius:18px;padding:20px}
+.card h2{margin:0 0 6px;font-size:17px}
+.card p{margin:0;color:var(--muted);font-size:13px}
+.metrics{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:12px}
+.metric{background:rgba(10,24,41,0.9);border:1px solid var(--line);border-radius:12px;padding:12px}
+.metric small{display:block;color:var(--muted);font-size:11px;font-weight:800;letter-spacing:0.6px}
+.metric strong{font-size:22px;font-weight:850;letter-spacing:-0.8px}
+.status{margin-top:8px;font-size:12px}
+.ok{color:var(--green)}.bad{color:var(--red)}.warn{color:var(--yellow)}
+.radarWrap{display:flex;justify-content:center;margin-top:12px}
+.radar{width:min(100%,360px);aspect-ratio:1;background:#071522;border:1px solid var(--line);border-radius:50%}
+canvas{width:100%;height:100%}
+.controls{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:340px;margin:15px auto 0}
+.controls button{min-height:62px;font-size:14px}
+.empty{visibility:hidden}
+.navRow{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:14px}
+.compass{display:flex;justify-content:center;margin-top:12px}
+.compassBox{width:170px;height:170px;border:2px solid var(--line);border-radius:50%;position:relative;background:#071522}
+.needle{position:absolute;left:50%;top:50%;width:4px;height:64px;background:linear-gradient(180deg,var(--red) 50%,var(--blue) 50%);border-radius:2px;transform-origin:50% 100%;transform:translate(-50%,-100%) rotate(0deg)}
+.compassBox .n{position:absolute;top:4px;left:50%;transform:translateX(-50%);color:var(--muted);font-size:12px;font-weight:800}
+.compassBox .s{position:absolute;bottom:4px;left:50%;transform:translateX(-50%);color:var(--muted);font-size:12px;font-weight:800}
+.compassBox .e{position:absolute;right:6px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:12px;font-weight:800}
+.compassBox .w{position:absolute;left:6px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:12px;font-weight:800}
+.calibPanel{margin-top:14px;padding:14px;background:rgba(10,24,41,0.9);border:1px solid var(--line);border-radius:12px}
+.barRow{display:flex;align-items:center;gap:10px;margin-top:8px}
+.barRow small{width:40px;color:var(--muted);font-size:11px;font-weight:800}
+.barTrack{flex:1;height:10px;background:#081526;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.barFill{height:100%;width:0%;background:linear-gradient(90deg,#3487ff,#2ed78a);transition:width .3s}
+.barRow span{width:32px;font-size:12px;font-weight:700}
+.calibPanel button{margin-top:12px}
+.log{height:90px;overflow:auto;background:#071522;border-radius:10px;padding:8px;color:var(--muted);font:12px monospace}
+@media(max-width:860px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<main>
+<h1>YAMIK Rover <small style="font-size:14px;color:var(--muted)">v5</small></h1>
+<p class="sub">Ultrasonic + LiDAR + GPS + IMU + waypoint navigation</p>
+
+<section class="bar">
+  <input id="ip" placeholder="Raspberry Pi IP address" value="192.168.1.13">
+  <button id="connectBtn">Connect Rover</button>
+  <span id="conn" class="status">Disconnected</span>
+</section>
+
+<div class="grid">
+
+<section class="card">
+  <h2>Ultrasonic</h2>
+  <p>Front and rear DYP sensors</p>
+  <div class="metrics">
+    <div class="metric"><small>FRONT</small><strong id="uFront">--</strong></div>
+    <div class="metric"><small>REAR</small><strong id="uRear">--</strong></div>
+  </div>
+</section>
+
+<section class="card">
+  <h2>LiDAR</h2>
+  <p>YDLIDAR X2 360&deg; scan</p>
+  <div class="metrics">
+    <div class="metric"><small>CLOSEST</small><strong id="lClosest">-- m</strong></div>
+    <div class="metric"><small>FRONT</small><strong id="lFront">-- m</strong></div>
+    <div class="metric"><small>REAR</small><strong id="lRear">-- m</strong></div>
+    <div class="metric"><small>SCAN RATE</small><strong id="lRate">-- Hz</strong></div>
+  </div>
+  <div class="radarWrap"><div class="radar"><canvas id="radar" width="360" height="360"></canvas></div></div>
+  <p id="lidarStatus" class="status">Waiting for /scan</p>
+</section>
+
+<section class="card">
+  <h2>GPS</h2>
+  <p>NEO-6M u-blox</p>
+  <div class="metrics">
+    <div class="metric"><small>LATITUDE</small><strong id="gLat">--</strong></div>
+    <div class="metric"><small>LONGITUDE</small><strong id="gLon">--</strong></div>
+    <div class="metric"><small>ALTITUDE</small><strong id="gAlt">-- m</strong></div>
+    <div class="metric"><small>SPEED</small><strong id="gSpeed">-- m/s</strong></div>
+  </div>
+  <p id="gStatus" class="status warn">Waiting for GPS fix</p>
+</section>
+
+<section class="card">
+  <h2>IMU</h2>
+  <p>BNO055 heading &mdash; aligned to your phone compass</p>
+  <div class="metrics">
+    <div class="metric"><small>HEADING</small><strong id="iHead">--&deg;</strong></div>
+    <div class="metric"><small>CALIBRATION</small><strong id="iCalib">--</strong></div>
+  </div>
+  <div class="compass">
+    <div class="compassBox">
+      <span class="n">N</span><span class="e">E</span><span class="s">S</span><span class="w">W</span>
+      <div class="needle" id="needle"></div>
+    </div>
+  </div>
+  <div style="text-align:center;margin-top:12px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+    <button id="calibBtn">Calibration Guide</button>
+    <button class="green" id="northBtn">Set North</button>
+  </div>
+  <div class="calibPanel" id="calibPanel" style="display:none">
+    <p><b>Step 1:</b> Place the rover flat and keep it completely still for 5 seconds (ACC + GYR).<br>
+    <b>Step 2:</b> Slowly wave the rover in a big figure-8 for 30&ndash;60 seconds (MAG).<br>
+    <b>Step 3:</b> When all four bars are full (3/3), press Save Calibration.</p>
+    <div class="barRow"><small>SYS</small><div class="barTrack"><div class="barFill" id="bar-SYS"></div></div><span id="val-SYS">0/3</span></div>
+    <div class="barRow"><small>GYR</small><div class="barTrack"><div class="barFill" id="bar-GYR"></div></div><span id="val-GYR">0/3</span></div>
+    <div class="barRow"><small>ACC</small><div class="barTrack"><div class="barFill" id="bar-ACC"></div></div><span id="val-ACC">0/3</span></div>
+    <div class="barRow"><small>MAG</small><div class="barTrack"><div class="barFill" id="bar-MAG"></div></div><span id="val-MAG">0/3</span></div>
+    <button class="green" id="saveCalibBtn">Save Calibration</button>
+  </div>
+  <div class="calibPanel" id="northPanel" style="display:none;margin-top:10px">
+    <p><b>Set North with your phone:</b><br>
+    1. Open the compass app on your phone.<br>
+    2. Hold the phone flat on top of the rover, both facing the same direction.<br>
+    3. Rotate the rover slowly until the phone compass reads exactly <b>0&deg; (N)</b>.<br>
+    4. Keep the rover still and press <b>Set North</b> below.</p>
+    <button class="green" id="northBtn2">Set North Now</button>
+  </div>
+  <p id="iEvent" class="status">Calibration and north offset are saved on the Pi and auto-load on every boot.</p>
+</section>
+
+<section class="card wide">
+  <h2>Waypoint Navigation</h2>
+  <p>Drive to a GPS point. LiDAR safety still active.</p>
+  <div class="navRow">
+    <input class="small" id="goalLat" placeholder="Goal latitude">
+    <input class="small" id="goalLon" placeholder="Goal longitude">
+    <button id="captureBtn">Use Current</button>
+    <button class="green" id="goBtn">GO</button>
+    <button class="danger" id="stopNavBtn">STOP</button>
+  </div>
+  <div class="metrics">
+    <div class="metric"><small>DISTANCE TO GOAL</small><strong id="nDist">-- m</strong></div>
+    <div class="metric"><small>STATE</small><strong id="nState">IDLE</strong></div>
+  </div>
+  <p id="nStatus" class="status">No goal set</p>
+</section>
+
+<section class="card wide">
+  <h2>Drive</h2>
+  <p>Manual skid-steer control (overrides navigation)</p>
+  <div class="controls">
+    <span class="empty"></span><button data-dir="forward">Forward</button><span class="empty"></span>
+    <button data-dir="left">Left</button><button class="danger" data-dir="stop">Stop</button><button data-dir="right">Right</button>
+    <span class="empty"></span><button data-dir="back">Back</button><span class="empty"></span>
+  </div>
+</section>
+
+<section class="card wide">
+  <h2>Safety status</h2>
+  <p id="safety" class="status">Waiting for /lidar/safety_status</p>
+  <div id="log" class="log"></div>
+</section>
+
+</div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/roslib@1.3.0/build/roslib.min.js"></script>
+<script>
+let ros=null, connected=false, lastScan=0, rateSamples=[];
+let goalTopic=null, enableTopic=null;
+const id=i=>document.getElementById(i);
+const canvas=id('radar'), ctx=canvas.getContext('2d');
+
+function log(s){id('log').textContent=new Date().toLocaleTimeString()+' '+s+'\n'+id('log').textContent}
+function setConn(s,ok=false){id('conn').textContent=s;id('conn').className='status '+(ok?'ok':'bad')}
+
+function connect(){
+  const ip=id('ip').value.trim();
+  if(!ip){alert('Enter Pi IP');return}
+  ros=new ROSLIB.Ros({url:'ws://'+ip+':9090'});
+
+  ros.on('connection',()=>{connected=true;setConn('Connected',true);log('UI v5 connected');startTopics()});
+  ros.on('error',e=>{connected=false;setConn('Error');log('rosbridge error '+e)});
+  ros.on('close',()=>{connected=false;setConn('Disconnected');log('rosbridge closed')});
+}
+
+function showUltrasonic(el, m){
+  if(m && m.data !== undefined){
+    const v=Number(m.data);
+    el.textContent = isFinite(v) ? v.toFixed(1)+' cm' : '--';
+  } else if(m && m.range !== undefined){
+    const v=Number(m.range);
+    el.textContent = isFinite(v) ? (v>=10 ? v.toFixed(2)+' m' : (v*100).toFixed(1)+' cm') : '--';
+  }
+}
+
+function startTopics(){
+  // Ultrasonic
+  new ROSLIB.Topic({ros,name:'/ultrasonic/front'})
+    .subscribe(m=>showUltrasonic(id('uFront'), m));
+  new ROSLIB.Topic({ros,name:'/ultrasonic/rear'})
+    .subscribe(m=>showUltrasonic(id('uRear'), m));
+
+  // LiDAR
+  const scanTopic=new ROSLIB.Topic({ros,name:'/scan',messageType:'sensor_msgs/msg/LaserScan'});
+  scanTopic.subscribe(scan=>{
+    const now=performance.now();
+    if(lastScan>0){
+      const rate=1000.0/(now-lastScan);
+      rateSamples.push(rate);
+      if(rateSamples.length>10)rateSamples.shift();
+      const avg=rateSamples.reduce((a,b)=>a+b,0)/rateSamples.length;
+      id('lRate').textContent=avg.toFixed(1)+' Hz';
+    }
+    lastScan=now;
+
+    let closest=Infinity, frontSum=0, frontCount=0, rearSum=0, rearCount=0;
+    for(let i=0;i<scan.ranges.length;i++){
+      const d=Number(scan.ranges[i]);
+      if(!Number.isFinite(d)||d<scan.range_min||d>scan.range_max)continue;
+      if(d<closest)closest=d;
+      let a=scan.angle_min+i*scan.angle_increment;
+      while(a>Math.PI)a-=2*Math.PI;
+      while(a<-Math.PI)a+=2*Math.PI;
+      if(a>=-Math.PI/3&&a<=Math.PI/3){frontSum+=d;frontCount++}
+      if(Math.abs(a)>=2*Math.PI/3){rearSum+=d;rearCount++}
+    }
+    id('lClosest').textContent=Number.isFinite(closest)?closest.toFixed(2)+' m':'-- m';
+    id('lFront').textContent=frontCount>0?(frontSum/frontCount).toFixed(2)+' m':'-- m';
+    id('lRear').textContent=rearCount>0?(rearSum/rearCount).toFixed(2)+' m':'-- m';
+    id('lidarStatus').textContent='Connected, live scan';
+    id('lidarStatus').className='status ok';
+    drawRadar(scan);
+  });
+
+  // GPS
+  new ROSLIB.Topic({ros,name:'/gps/fix',messageType:'sensor_msgs/msg/NavSatFix'})
+    .subscribe(m=>{
+      id('gLat').textContent=m.latitude.toFixed(6);
+      id('gLon').textContent=m.longitude.toFixed(6);
+      id('gAlt').textContent=Number.isFinite(m.altitude)?m.altitude.toFixed(1)+' m':'-- m';
+    });
+  new ROSLIB.Topic({ros,name:'/gps/status',messageType:'std_msgs/msg/String'})
+    .subscribe(m=>{
+      const t=m.data;
+      const el=id('gStatus');
+      el.textContent=t;
+      el.className='status '+(t.startsWith('NO FIX')?'bad':(t.startsWith('GPS')||t.startsWith('DGPS')?'ok':'warn'));
+      const sp=t.match(/Speed:\s*([\d.]+)/);
+      if(sp)id('gSpeed').textContent=sp[1]+' m/s';
+    });
+
+  // IMU
+  new ROSLIB.Topic({ros,name:'/imu/heading',messageType:'std_msgs/msg/Float32'})
+    .subscribe(m=>{
+      id('iHead').textContent=m.data.toFixed(0)+'\u00b0';
+      id('needle').style.transform='translate(-50%,-100%) rotate('+m.data+'deg)';
+    });
+  new ROSLIB.Topic({ros,name:'/imu/calib',messageType:'std_msgs/msg/String'})
+    .subscribe(m=>{
+      const cm=m.data.match(/SYS:(\d)\s*GYR:(\d)\s*ACC:(\d)\s*MAG:(\d)/);
+      if(cm){
+        const vals={SYS:+cm[1],GYR:+cm[2],ACC:+cm[3],MAG:+cm[4]};
+        for(const k in vals){
+          const bar=document.getElementById('bar-'+k);
+          if(bar)bar.style.width=(vals[k]/3*100)+'%';
+          const v=document.getElementById('val-'+k);
+          if(v)v.textContent=vals[k]+'/3';
+        }
+        id('iCalib').textContent='SYS:'+vals.SYS+' GYR:'+vals.GYR+' ACC:'+vals.ACC+' MAG:'+vals.MAG;
+        const all=vals.SYS===3&&vals.GYR===3&&vals.ACC===3&&vals.MAG===3;
+        id('iCalib').style.color=all?'var(--green)':'var(--yellow)';
+      }
+    });
+  new ROSLIB.Topic({ros,name:'/imu/calib_event',messageType:'std_msgs/msg/String'})
+    .subscribe(m=>{
+      id('iEvent').textContent=m.data;
+      id('iEvent').className='status '+((m.data.startsWith('CALIB_SAVED')||m.data.startsWith('CALIB_LOADED')||m.data.startsWith('NORTH_SET')||m.data.startsWith('NORTH_LOADED'))?'ok':'warn');
+      log(m.data);
+    });
+
+  // Navigation
+  goalTopic=new ROSLIB.Topic({ros,name:'/nav/goal',messageType:'std_msgs/msg/Float32MultiArray'});
+  enableTopic=new ROSLIB.Topic({ros,name:'/nav/enable',messageType:'std_msgs/msg/Bool'});
+  new ROSLIB.Topic({ros,name:'/nav/status',messageType:'std_msgs/msg/String'})
+    .subscribe(m=>{
+      const t=m.data;
+      const dm=t.match(/([\d.]+)\s*m away/);
+      if(dm)id('nDist').textContent=dm[1]+' m';
+      const st=t.split('|')[0].trim();
+      id('nState').textContent=st;
+      id('nStatus').textContent=t;
+      id('nStatus').className='status '+(st==='REACHED'?'ok':(st==='DRIVING'||st==='TURNING'?'warn':''));
+    });
+
+  // Safety
+  new ROSLIB.Topic({ros,name:'/lidar/safety_status',messageType:'std_msgs/msg/String'})
+    .subscribe(m=>{
+      const t=m.data;
+      id('safety').textContent=t;
+      id('safety').className='status '+(t.includes('BLOCKED')?'bad':(t.includes('CLEAR')?'ok':'warn'));
+    });
+}
+
+function drawRadar(scan){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  const W=canvas.width,c=W/2,R=W*0.42,maxR=Math.min(scan.range_max||8,8);
+  ctx.strokeStyle='#29435f';ctx.lineWidth=1;
+  for(let f=0.25;f<=1;f+=0.25){ctx.beginPath();ctx.arc(c,c,R*f,0,Math.PI*2);ctx.stroke()}
+  ctx.beginPath();ctx.moveTo(c,c-R);ctx.lineTo(c,c+R);ctx.moveTo(c-R,c);ctx.lineTo(c+R,c);ctx.stroke();
+  ctx.fillStyle='#52a8ff';
+  for(let i=0;i<scan.ranges.length;i++){
+    const d=Number(scan.ranges[i]);
+    if(!Number.isFinite(d)||d<scan.range_min||d>maxR)continue;
+    const a=scan.angle_min+i*scan.angle_increment;
+    const x=c+Math.sin(a)*R*(d/maxR);
+    const y=c-Math.cos(a)*R*(d/maxR);
+    ctx.fillRect(x-1.5,y-1.5,3,3);
+  }
+  ctx.fillStyle='#fff';
+  ctx.beginPath();ctx.moveTo(c,c-12);ctx.lineTo(c-8,c+9);ctx.lineTo(c+8,c+9);ctx.closePath();ctx.fill();
+}
+
+// Motor node treats linear.x as STEERING (+ = right) and
+// angular.z as INVERTED THROTTLE (negative = forward).
+function cmd(dir){
+  if(!connected||!ros)return;
+  let x=0,z=0;
+  if(dir==='forward')z=-0.35;
+  if(dir==='back')z=0.35;
+  if(dir==='left')x=-0.8;
+  if(dir==='right')x=0.8;
+  const cmdTopic=new ROSLIB.Topic({ros,name:'/cmd_vel_raw',messageType:'geometry_msgs/msg/Twist'});
+  cmdTopic.publish(new ROSLIB.Message({linear:{x:x,y:0,z:0},angular:{x:0,y:0,z:z}}));
+}
+
+function sendGoal(){
+  if(!goalTopic){alert('Connect first');return}
+  const lat=parseFloat(id('goalLat').value);
+  const lon=parseFloat(id('goalLon').value);
+  if(!isFinite(lat)||!isFinite(lon)){alert('Enter valid goal latitude and longitude');return}
+  goalTopic.publish(new ROSLIB.Message({data:[lat,lon]}));
+  enableTopic.publish(new ROSLIB.Message({data:true}));
+  log('Goal set: '+lat.toFixed(6)+', '+lon.toFixed(6));
+}
+function stopNav(){
+  if(!enableTopic)return;
+  enableTopic.publish(new ROSLIB.Message({data:false}));
+  log('Navigation stopped');
+}
+function sendSetNorth(){
+  if(!connected||!ros){alert('Connect first');return}
+  const t=new ROSLIB.Topic({ros,name:'/imu/set_north',messageType:'std_msgs/msg/Bool'});
+  t.publish(new ROSLIB.Message({data:true}));
+  id('iEvent').textContent='Aligning north... keep the rover still';
+}
+
+id('connectBtn').onclick=connect;
+id('goBtn').onclick=sendGoal;
+id('stopNavBtn').onclick=stopNav;
+id('captureBtn').onclick=()=>{
+  const lat=id('gLat').textContent, lon=id('gLon').textContent;
+  if(lat==='--'||lon==='--'){alert('No GPS fix yet');return}
+  id('goalLat').value=lat; id('goalLon').value=lon;
+};
+id('calibBtn').onclick=()=>{
+  const p=id('calibPanel');
+  p.style.display=(p.style.display==='none'||p.style.display==='')?'block':'none';
+  id('northPanel').style.display='none';
+};
+id('northBtn').onclick=()=>{
+  const p=id('northPanel');
+  p.style.display=(p.style.display==='none'||p.style.display==='')?'block':'none';
+  id('calibPanel').style.display='none';
+};
+id('northBtn2').onclick=sendSetNorth;
+id('saveCalibBtn').onclick=()=>{
+  if(!connected||!ros){alert('Connect first');return}
+  const t=new ROSLIB.Topic({ros,name:'/imu/save_calib',messageType:'std_msgs/msg/Bool'});
+  t.publish(new ROSLIB.Message({data:true}));
+  id('iEvent').textContent='Saving...';
+};
+
+document.querySelectorAll('[data-dir]').forEach(btn=>{
+  btn.onmousedown=()=>cmd(btn.dataset.dir);
+  btn.ontouchstart=e=>{e.preventDefault();cmd(btn.dataset.dir)};
+});
+</script>
+</body>
+</html>

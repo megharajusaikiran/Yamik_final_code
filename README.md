@@ -1,39 +1,32 @@
-# YAMIK Technologies Rover
+# YAMIK Rover
 
-ROS 2 Jazzy skid-steer rover project for Raspberry Pi 5 running Ubuntu 24.04.
+ROS 2 Jazzy skid-steer rover on Raspberry Pi 5, Ubuntu 24.
+4x 24V motors, 2x BTS7960 drivers, LiDAR, dual ultrasonic, NEO-6M GPS, BNO055 IMU.
 
-## Hardware
-
-- Raspberry Pi 5
-- Ubuntu 24.04
-- ROS 2 Jazzy
-- Two BTS7960 motor drivers
-- Four 24 V brushed DC motors in skid-steer configuration
-- Front A02YYUW UART ultrasonic sensor on Pi UART
-- Rear A02YYUW UART ultrasonic sensor through USB-TTL adapter
-- Local PC HTML control dashboard through rosbridge WebSocket
-
-## ROS Topics
-
-| Topic | Type | Purpose |
+## Hardware map
+| Device | Interface | Port |
 |---|---|---|
-| `/cmd_vel` | `geometry_msgs/msg/Twist` | Browser and ROS rover movement command |
-| `/ultrasonic/front` | `sensor_msgs/msg/Range` | Front ultrasonic distance |
-| `/ultrasonic/rear` | `sensor_msgs/msg/Range` | Rear ultrasonic distance |
+| YDLIDAR X2 | USB-TTL | /dev/ttyUSB1 |
+| Rear ultrasonic (DYP) | USB-TTL | /dev/ttyUSB0 |
+| GPS NEO-6M | USB-TTL | /dev/ttyUSB2 (9600 baud) |
+| Front ultrasonic (DYP) | Pi UART | /dev/ttyAMA0 |
+| IMU BNO055 | I2C bus 1 | address 0x28 |
+
+## Packages
+- rover_bringup - main launch (motors, sensors, rosbridge, lidar, safety)
+- rover_nav - GPS node, IMU node, waypoint navigation node
+- ui/index.html - web UI (v5): telemetry, manual drive, calibration, Set North, waypoint GO
 
 ## Run
+ros2 launch rover_nav rover_master.launch.py
+UI: http://<pi-ip>/index.html (rosbridge on port 9090)
 
-```bash
-cd ~/rover_ws
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
-ros2 launch rover_bringup rover_all.launch.py
-```
+## Topics
+/scan  /ultrasonic/front  /ultrasonic/rear  /gps/fix  /imu/heading
+/cmd_vel_raw (UI+nav) -> /cmd_vel (motor, via lidar safety node)
 
-## Safety
-
-- Test with wheels lifted first.
-- Use a fused 24 V motor supply and physical emergency switch.
-- Use a separate regulated supply for the Raspberry Pi.
-- Pi ground, motor-driver logic ground, and battery negative must share common ground.
-- Never commit passwords, API keys, or private SSH keys.
+## Notes
+- IMU calibration + north offset are saved in ~/bno055_calib.json and
+  ~/bno055_north.json (per-rover, per-location - NOT committed to git).
+- Motor node convention: linear.x = steering (+right), angular.z = inverted throttle.
+- After cloning on a new Pi: enable I2C (raspi-config), add user to i2c group, reboot.

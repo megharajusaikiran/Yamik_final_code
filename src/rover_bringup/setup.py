@@ -18,6 +18,8 @@ setup(
     zip_safe=True,
     entry_points={
         'console_scripts': [
+            'lidar_safety_node = rover_bringup.lidar_safety_node:main',
+            'rover_sensors_gps_node = rover_bringup.rover_sensors_gps_node:main',
             'ultrasonic_two_pi5_node = rover_bringup.ultrasonic_two_pi5_node:main',
             'motor_node = rover_bringup.motor_node:main',
             'ultrasonic_node = rover_bringup.ultrasonic_node:main',
